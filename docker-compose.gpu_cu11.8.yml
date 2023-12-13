@@ -1,0 +1,89 @@
+version: "3.4"
+
+services:
+  traefik:
+    image: "traefik:v2.10"
+    container_name: "traefik"
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:8070"
+      - "--accesslog"
+      - "--api"
+    ports:
+      - "8070:8070"
+      #- "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  whoami:
+    # A container that exposes an API to show its IP address
+    image: traefik/whoami
+    labels:
+      - traefik.http.routers.whoami.rule=Host(`whoami.localhost`)
+      - traefik.http.routers.whoami.entrypoints=web
+      - traefik.enable=true
+
+  whisper-asr-webservice-1:
+    image: allomediadocker/openai-whisper-asr-webservice:cuda-11.8
+    environment:
+      # https://github.com/openai/whisper#available-models-and-languages
+      - ASR_MODEL=large
+      - ASR_ENGINE=faster_whisper # faster_whisper can't work with cuda10 (only cuda 11)
+    env_file:
+      - .env
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            capabilities: [gpu]
+            device_ids: ['0']
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.whisper-asr-webservice.rule=Host(`${TRAEFIK_HOSTNAME}`)
+      - traefik.http.routers.whisper-asr-webservice.entrypoints=web
+      - traefik.http.services.whisper-asr-webservice.loadbalancer.server.port=9000
+    volumes:
+      - ./app:/app/app
+      - cache-pip:/root/.cache/pip
+      - cache-poetry:/root/.cache/poetry
+      - cache-whisper:/root/.cache/whisper
+
+  whisper-asr-webservice-2:
+    image: allomediadocker/openai-whisper-asr-webservice:cuda-11.8
+    environment:
+      # https://github.com/openai/whisper#available-models-and-languages
+      - ASR_MODEL=large
+      - ASR_ENGINE=faster_whisper
+    env_file:
+      - .env
+    deploy:
+      mode: replicated
+      replicas: 1
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            capabilities: [gpu]
+            device_ids: ['1']
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.whisper-asr-webservice.rule=Host(`${TRAEFIK_HOSTNAME}`)
+      - traefik.http.routers.whisper-asr-webservice.entrypoints=web
+      - traefik.http.services.whisper-asr-webservice.loadbalancer.server.port=9000
+    volumes:
+      - ./app:/app/app
+      - cache-pip:/root/.cache/pip
+      - cache-poetry:/root/.cache/poetry
+      - cache-whisper:/root/.cache/whisper
+
+volumes:
+  cache-pip:
+  cache-poetry:
+  cache-whisper:
+  cache-faster-whisper:

@@ -1,0 +1,75 @@
+FROM swaggerapi/swagger-ui:v5.9.1 AS swagger-ui
+FROM wildbrother/cuda10.2-cudnn8-runtime-ubuntu18.04
+
+ENV PYTHON_VERSION=3.10
+ENV POETRY_VENV=/app/.venv
+
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A4B469963BF863CC
+
+RUN apt-get update && \
+    apt-get install -y software-properties-common && \
+    add-apt-repository -y ppa:deadsnakes/ppa
+    #apt-get update && \
+    #apt-get -qq install --no-install-recommends python3.10
+
+RUN export DEBIAN_FRONTEND=noninteractive \
+    && apt-get -qq update \
+    && apt-get -qq install --no-install-recommends \
+    #python${PYTHON_VERSION} \
+    #python${PYTHON_VERSION}-venv \
+    #python3-pip \
+    ffmpeg \
+    build-essential \
+    zlib1g-dev \
+    libncurses5-dev \
+    libgdbm-dev \
+    libnss3-dev \
+    libssl-dev \
+    libreadline-dev \
+    libffi-dev \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cd /tmp \
+    && wget https://www.python.org/ftp/python/3.10.9/Python-3.10.9.tgz \
+    && tar -xf Python-3.10.9.tgz \
+    && cd Python-3.10.9 \
+    && ./configure --enable-optimizations \
+    && make altinstall \
+    && make install
+
+RUN ln -s -f /usr/bin/python${PYTHON_VERSION} /usr/bin/python3 && \
+    ln -s -f /usr/bin/python${PYTHON_VERSION} /usr/bin/python && \
+    ln -s -f /usr/bin/pip3 /usr/bin/pip
+
+RUN cd /tmp \
+    && wget https://bootstrap.pypa.io/get-pip.py \
+    && python3 get-pip.py
+
+
+#RUN python3 -m venv $POETRY_VENV \
+#    && $POETRY_VENV/bin/pip install -U pip setuptools \
+#    && $POETRY_VENV/bin/pip install poetry==1.6.1
+
+RUN pip3 install -U pip setuptools \
+    && pip3 install poetry==1.6.1
+
+ENV PATH="${PATH}:${POETRY_VENV}/bin"
+
+WORKDIR /app
+
+COPY pyproject.toml ./
+COPY poetry_oldgpu.lock ./poetry.lock
+
+RUN poetry config virtualenvs.in-project true
+RUN poetry install --no-root
+
+COPY . .
+COPY --from=swagger-ui /usr/share/nginx/html/swagger-ui.css swagger-ui-assets/swagger-ui.css
+COPY --from=swagger-ui /usr/share/nginx/html/swagger-ui-bundle.js swagger-ui-assets/swagger-ui-bundle.js
+
+RUN poetry install
+#RUN $POETRY_VENV/bin/pip install torch==1.13.0+cu117 -f https://download.pytorch.org/whl/torch
+RUN $POETRY_VENV/bin/pip install torch==1.11.0+cu102 -f https://download.pytorch.org/whl/torch
+
+CMD gunicorn --bind 0.0.0.0:9000 --workers 1 --timeout 0 app.webservice:app -k uvicorn.workers.UvicornWorker

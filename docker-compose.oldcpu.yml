@@ -1,0 +1,105 @@
+version: "3.4"
+
+services:
+  traefik:
+    image: "traefik:v2.10"
+    #container_name: "traefik"
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:8071"
+      - "--accesslog"
+      - "--api"
+    ports:
+      - "8071:8071"
+      #- "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  whoami:
+    # A container that exposes an API to show its IP address
+    image: traefik/whoami
+    labels:
+      - traefik.http.routers.whoami.rule=Host(`whoami.localhost`)
+      - traefik.http.routers.whoami.entrypoints=web
+      - traefik.enable=true
+
+  whisper-asr-webservice-1:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    environment:
+      # https://github.com/openai/whisper#available-models-and-languages
+      - ASR_MODEL=medium
+      - ASR_ENGINE=faster_whisper
+    env_file:
+      - .env
+    deploy:
+      mode: replicated
+      replicas: 1
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.whisper-asr-webservice.rule=Host(`${TRAEFIK_HOSTNAME}`)
+      - traefik.http.routers.whisper-asr-webservice.entrypoints=web
+      - traefik.http.services.whisper-asr-webservice.loadbalancer.server.port=9000
+      - traefik.http.middlewares.whisper-asr-webservice.inflightreq.amount=1
+      - traefik.http.services.whisper-asr-webservice.loadBalancer.sticky.cookie=true
+    volumes:
+      - ./app:/app/app
+      - cache-pip:/root/.cache/pip
+      - cache-poetry:/root/.cache/poetry
+      - cache-whisper:/root/.cache/whisper
+
+  whisper-asr-webservice-2:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    environment:
+      # https://github.com/openai/whisper#available-models-and-languages
+      - ASR_MODEL=medium
+      - ASR_ENGINE=faster_whisper
+    env_file:
+      - .env
+    deploy:
+      mode: replicated
+      replicas: 1
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.whisper-asr-webservice.rule=Host(`${TRAEFIK_HOSTNAME}`)
+      - traefik.http.routers.whisper-asr-webservice.entrypoints=web
+      - traefik.http.services.whisper-asr-webservice.loadbalancer.server.port=9000
+      - traefik.http.middlewares.whisper-asr-webservice.inflightreq.amount=1
+      - traefik.http.services.whisper-asr-webservice.loadBalancer.sticky.cookie=true
+    volumes:
+      - ./app:/app/app
+      - cache-pip:/root/.cache/pip
+      - cache-poetry:/root/.cache/poetry
+      - cache-whisper:/root/.cache/whisper
+
+  whisper-asr-webservice-3:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    environment:
+      # https://github.com/openai/whisper#available-models-and-languages
+      - ASR_MODEL=medium
+      - ASR_ENGINE=faster_whisper
+    env_file:
+      - .env
+    deploy:
+      mode: replicated
+      replicas: 1
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.whisper-asr-webservice.rule=Host(`${TRAEFIK_HOSTNAME}`)
+      - traefik.http.routers.whisper-asr-webservice.entrypoints=web
+      - traefik.http.services.whisper-asr-webservice.loadbalancer.server.port=9000
+      - traefik.http.middlewares.whisper-asr-webservice.inflightreq.amount=1
+      - traefik.http.services.whisper-asr-webservice.loadBalancer.sticky.cookie=true
+    volumes:
+      - ./app:/app/app
+      - cache-pip:/root/.cache/pip
+      - cache-poetry:/root/.cache/poetry
+      - cache-whisper:/root/.cache/whisper
+
+volumes:
+  cache-pip:
+  cache-poetry:
+  cache-whisper:
+  cache-faster-whisper:
